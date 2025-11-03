@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cuaca Indonesia - Prakiraan Cuaca Profesional</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {0%{opacity:0;transform:translateY(20px);}100%{opacity:1;transform:translateY(0);}}
+    @keyframes slideIn {0%{opacity:0;transform:translateX(-30px);}100%{opacity:1;transform:translateX(0);}}
+    @keyframes pulse-glow {0%,100%{box-shadow:0 0 20px rgba(14,165,233,0.3);}50%{box-shadow:0 0 30px rgba(14,165,233,0.6);}}
+    @keyframes spin-slow {from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+    
+    .fade-in {animation:fadeIn 0.6s cubic-bezier(.16,1,.3,1);}
+    .slide-in {animation:slideIn 0.5s cubic-bezier(.16,1,.3,1);}
+    .pulse-glow {animation:pulse-glow 2s ease-in-out infinite;}
+    .spin-slow {animation:spin-slow 20s linear infinite;}
+    
+    .glass-card {backdrop-filter:blur(12px);background:rgba(255,255,255,0.85);}
+    .city-btn:active {transform:scale(0.95);}
+    .weather-gradient {background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);}
+    
+    .custom-scroll::-webkit-scrollbar {width:8px;height:8px;}
+    .custom-scroll::-webkit-scrollbar-track {background:rgba(148,163,184,0.1);border-radius:10px;}
+    .custom-scroll::-webkit-scrollbar-thumb {background:rgba(14,165,233,0.4);border-radius:10px;}
+    .custom-scroll::-webkit-scrollbar-thumb:hover {background:rgba(14,165,233,0.6);}
+    
+    .forecast-card {transition:all 0.3s ease;}
+    .forecast-card:hover {transform:translateY(-5px);box-shadow:0 20px 40px rgba(0,0,0,0.15);}
+    
+    .stat-card {position:relative;overflow:hidden;}
+    .stat-card::before {content:'';position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,transparent,rgba(255,255,255,0.1));opacity:0;transition:opacity 0.3s;}
+    .stat-card:hover::before {opacity:1;}
+  </style>
+</head>
+<body class="bg-gradient-to-br from-sky-100 via-blue-50 to-indigo-100 min-h-screen">
+
+  <!-- Header dengan efek glassmorphism -->
+  <header class="glass-card shadow-lg sticky top-0 z-50 border-b border-white/20">
+    <div class="max-w-7xl mx-auto px-4 py-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="bg-gradient-to-br from-sky-400 to-blue-600 p-3 rounded-2xl shadow-lg spin-slow">
+            <span class="text-3xl">🌤️</span>
+          </div>
+          <div>
+            <h1 class="text-3xl md:text-4xl font-black bg-gradient-to-r from-sky-600 to-blue-800 bg-clip-text text-transparent">
+              Cuaca Indonesia
+            </h1>
+            <p class="text-sm text-sky-600 font-medium">Prakiraan cuaca lengkap & real-time</p>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center gap-3 text-sm">
+          <div class="flex items-center gap-2 bg-sky-50 px-4 py-2 rounded-full">
+            <span class="text-2xl">📅</span>
+            <span id="currentDate" class="font-semibold text-sky-700"></span>
+          </div>
+          <div class="flex items-center gap-2 bg-sky-50 px-4 py-2 rounded-full">
+            <span class="text-2xl">🕐</span>
+            <span id="currentTime" class="font-semibold text-sky-700"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8">
+    
+    <!-- Search & Filter Section -->
+    <section class="glass-card rounded-3xl p-6 md:p-8 shadow-xl border border-white/30 mb-8 fade-in">
+      <div class="flex flex-col md:flex-row gap-4 items-center">
+        <div class="flex-1 w-full relative">
+          <span class="absolute left-4 top-1/2 -translate-y-1/2 text-2xl">🔍</span>
+          <input 
+            id="searchInput" 
+            type="text"
+            placeholder="Cari kota atau provinsi..." 
+            class="w-full pl-14 pr-4 py-4 rounded-2xl border-2 border-sky-200 focus:border-sky-500 outline-none transition-all bg-white/80 text-lg font-medium"
+          />
+        </div>
+        <select id="provinceFilter" class="px-6 py-4 rounded-2xl border-2 border-sky-200 focus:border-sky-500 outline-none bg-white/80 font-medium cursor-pointer">
+          <option value="">Semua Provinsi</option>
+        </select>
+      </div>
+      
+      <div class="mt-6 flex items-center justify-between">
+        <div class="text-sm text-sky-600 font-medium">
+          <span id="cityCount">0</span> kota tersedia
+        </div>
+        <button onclick="resetFilters()" class="px-5 py-2 bg-sky-100 hover:bg-sky-200 text-sky-700 rounded-xl font-semibold transition-all">
+          Reset Filter
+        </button>
+      </div>
+    </section>
+
+    <!-- City Grid -->
+    <section class="mb-8">
+      <h2 class="text-2xl font-bold text-sky-800 mb-5 flex items-center gap-3 slide-in">
+        <span class="text-3xl">🏙️</span>
+        Pilih Kota
+      </h2>
+      <div id="cityGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 custom-scroll max-h-96 overflow-y-auto pr-2">
+      </div>
+    </section>
+
+    <!-- Weather Display -->
+    <section id="weatherSection" class="hidden fade-in">
+      
+      <!-- Current Weather Card -->
+      <div id="currentWeather" class="glass-card rounded-3xl p-8 md:p-10 shadow-2xl border border-white/30 mb-8">
+      </div>
+
+      <!-- Statistics Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div id="statCards"></div>
+      </div>
+
+      <!-- 7-Day Forecast -->
+      <div class="glass-card rounded-3xl p-6 md:p-8 shadow-xl border border-white/30 mb-8">
+        <h3 class="text-2xl font-bold text-sky-800 mb-6 flex items-center gap-3">
+          <span class="text-3xl">📊</span>
+          Prakiraan 7 Hari
+        </h3>
+        <div id="forecastGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        </div>
+      </div>
+
+      <!-- Hourly Forecast -->
+      <div class="glass-card rounded-3xl p-6 md:p-8 shadow-xl border border-white/30">
+        <h3 class="text-2xl font-bold text-sky-800 mb-6 flex items-center gap-3">
+          <span class="text-3xl">⏰</span>
+          Prakiraan Per Jam (24 Jam)
+        </h3>
+        <div id="hourlyForecast" class="flex gap-3 overflow-x-auto custom-scroll pb-4">
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="glass-card border-t border-white/20 mt-16 py-8">
+    <div class="max-w-7xl mx-auto px-4 text-center">
+      <div class="flex items-center justify-center gap-3 mb-3">
+        <span class="text-3xl">🌤️</span>
+        <span class="text-xl font-bold text-sky-700">WeatherPro Indonesia</span>
+      </div>
+      <p class="text-sky-600 font-medium mb-2">&copy; 2025 WeatherPro Indonesia. All rights reserved.</p>
+      <p class="text-xs text-sky-400">Data cuaca simulasi untuk tujuan demonstrasi</p>
+    </div>
+  </footer>
+
+  <script>
+    // Data kota lengkap
+    const cities = [
+      {name:'Jakarta',prov:'DKI Jakarta',lat:-6.2,lon:106.8},
+      {name:'Surabaya',prov:'Jawa Timur',lat:-7.25,lon:112.75},
+      {name:'Bandung',prov:'Jawa Barat',lat:-6.9,lon:107.6},
+      {name:'Denpasar',prov:'Bali',lat:-8.67,lon:115.21},
+      {name:'Medan',prov:'Sumatera Utara',lat:3.5,lon:98.6},
+      {name:'Makassar',prov:'Sulawesi Selatan',lat:-5.1,lon:119.4},
+      {name:'Semarang',prov:'Jawa Tengah',lat:-6.97,lon:110.4},
+      {name:'Palembang',prov:'Sumatera Selatan',lat:-2.97,lon:104.77},
+      {name:'Batam',prov:'Kepulauan Riau',lat:1.04,lon:103.99},
+      {name:'Yogyakarta',prov:'DIY',lat:-7.79,lon:110.36},
+      {name:'Balikpapan',prov:'Kalimantan Timur',lat:-1.23,lon:116.8},
+      {name:'Padang',prov:'Sumatera Barat',lat:-0.94,lon:100.4},
+      {name:'Malang',prov:'Jawa Timur',lat:-7.97,lon:112.6},
+      {name:'Banjarmasin',prov:'Kalimantan Selatan',lat:-3.3,lon:114.5},
+      {name:'Pekanbaru',prov:'Riau',lat:0.5,lon:101.45},
+      {name:'Tangerang',prov:'Banten',lat:-6.17,lon:106.63},
+      {name:'Serang',prov:'Banten',lat:-6.12,lon:106.15},
+      {name:'Gorontalo',prov:'Gorontalo',lat:0.54,lon:123.06},
+      {name:'Ambon',prov:'Maluku',lat:-3.69,lon:128.18},
+      {name:'Kupang',prov:'NTT',lat:-10.17,lon:123.6},
+      {name:'Pontianak',prov:'Kalimantan Barat',lat:-0.02,lon:109.34},
+      {name:'Jambi',prov:'Jambi',lat:-1.61,lon:103.61},
+      {name:'Samarinda',prov:'Kalimantan Timur',lat:-0.5,lon:117.15},
+      {name:'Manado',prov:'Sulawesi Utara',lat:1.47,lon:124.84},
+      {name:'Cirebon',prov:'Jawa Barat',lat:-6.7,lon:108.5},
+      {name:'Banda Aceh',prov:'Aceh',lat:5.5,lon:95.3},
+      {name:'Bogor',prov:'Jawa Barat',lat:-6.5,lon:106.8},
+      {name:'Palu',prov:'Sulawesi Tengah',lat:-0.89,lon:119.87},
+      {name:'Mataram',prov:'NTB',lat:-8.58,lon:116.11},
+      {name:'Kendari',prov:'Sulawesi Tenggara',lat:-3.94,lon:122.51},
+      {name:'Jayapura',prov:'Papua',lat:-2.53,lon:140.71},
+      {name:'Manokwari',prov:'Papua Barat',lat:-0.86,lon:134.08},
+      {name:'Sorong',prov:'Papua Barat Daya',lat:-0.86,lon:131.25},
+      {name:'Ternate',prov:'Maluku Utara',lat:0.78,lon:127.36},
+      {name:'Bengkulu',prov:'Bengkulu',lat:-3.79,lon:102.26},
+      {name:'Mamuju',prov:'Sulawesi Barat',lat:-2.67,lon:118.88},
+      {name:'Pangkal Pinang',prov:'Bangka Belitung',lat:-2.13,lon:106.11},
+      {name:'Tanjung Pinang',prov:'Kepulauan Riau',lat:0.91,lon:104.45},
+      {name:'Tarakan',prov:'Kalimantan Utara',lat:3.3,lon:117.63},
+      {name:'Palangkaraya',prov:'Kalimantan Tengah',lat:-2.21,lon:113.91},
+    ];
+
+    const weatherConditions = [
+      {icon:'☀️',desc:'Cerah',color:'#FDB515'},
+      {icon:'⛅',desc:'Cerah Berawan',color:'#93C5FD'},
+      {icon:'☁️',desc:'Berawan',color:'#94A3B8'},
+      {icon:'🌦️',desc:'Hujan Ringan',color:'#60A5FA'},
+      {icon:'🌧️',desc:'Hujan',color:'#3B82F6'},
+      {icon:'⛈️',desc:'Hujan Petir',color:'#1E40AF'},
+      {icon:'🌫️',desc:'Berkabut',color:'#CBD5E1'},
+    ];
+
+    let currentCity = null;
+    let searchTerm = '';
+    let provinceFilter = '';
+
+    // Generate weather data
+    function generateWeather(city) {
+      const condition = weatherConditions[Math.floor(Math.random()*weatherConditions.length)];
+      const baseTemp = (city.lat<0?27:29) + (Math.random()*5-2.5);
+      const temp = Math.round(baseTemp);
+      
+      return {
+        ...city,
+        temp,
+        feelsLike: temp + Math.floor(Math.random()*3-1),
+        humidity: Math.floor(55+Math.random()*40),
+        windSpeed: (Math.random()*8+2).toFixed(1),
+        windDir: ['N','NE','E','SE','S','SW','W','NW'][Math.floor(Math.random()*8)],
+        pressure: Math.floor(1008+Math.random()*15),
+        visibility: (Math.random()*5+5).toFixed(1),
+        uvIndex: Math.floor(Math.random()*11),
+        condition,
+        min: temp - Math.floor(Math.random()*3+2),
+        max: temp + Math.floor(Math.random()*3+2),
+      };
+    }
+
+    // Generate forecast
+    function generate7DayForecast(baseData) {
+      const days = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+      const forecast = [];
+      const today = new Date();
+      
+      for(let i=0;i<7;i++){
+        const date = new Date(today);
+        date.setDate(date.getDate()+i);
+        const dayName = i===0?'Hari Ini':days[date.getDay()];
+        const condition = weatherConditions[Math.floor(Math.random()*weatherConditions.length)];
+        const temp = baseData.temp + Math.floor(Math.random()*6-3);
+        
+        forecast.push({
+          day: dayName,
+          date: date.getDate()+'/'+(date.getMonth()+1),
+          condition,
+          temp,
+          min: temp - 2,
+          max: temp + 3,
+        });
+      }
+      return forecast;
+    }
+
+    // Generate hourly forecast
+    function generateHourlyForecast(baseData) {
+      const hourly = [];
+      const now = new Date();
+      
+      for(let i=0;i<24;i++){
+        const time = new Date(now);
+        time.setHours(now.getHours()+i);
+        const hour = time.getHours().toString().padStart(2,'0')+':00';
+        const condition = weatherConditions[Math.floor(Math.random()*weatherConditions.length)];
+        const temp = baseData.temp + Math.floor(Math.random()*5-2);
+        
+        hourly.push({hour,condition,temp});
+      }
+      return hourly;
+    }
+
+    // Update datetime
+    function updateDateTime() {
+      const now = new Date();
+      const options = {weekday:'long',year:'numeric',month:'long',day:'numeric'};
+      document.getElementById('currentDate').textContent = now.toLocaleDateString('id-ID',options);
+      document.getElementById('currentTime').textContent = now.toLocaleTimeString('id-ID');
+    }
+
+    // Populate province filter
+    function populateProvinceFilter() {
+      const provinces = [...new Set(cities.map(c=>c.prov))].sort();
+      const select = document.getElementById('provinceFilter');
+      provinces.forEach(p=>{
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        select.appendChild(opt);
+      });
+    }
+
+    // Render city grid
+    function renderCityGrid() {
+      const filtered = cities.filter(c=>
+        (c.name.toLowerCase().includes(searchTerm)||c.prov.toLowerCase().includes(searchTerm))&&
+        (provinceFilter===''||c.prov===provinceFilter)
+      );
+      
+      document.getElementById('cityCount').textContent = filtered.length;
+      
+      const grid = document.getElementById('cityGrid');
+      grid.innerHTML = filtered.map(c=>`
+        <button onclick="selectCity('${c.name}')" class="city-btn glass-card p-4 rounded-2xl border-2 ${currentCity&&currentCity.name===c.name?'border-sky-500 pulse-glow':'border-white/30'} hover:border-sky-400 transition-all shadow-lg hover:shadow-xl">
+          <div class="text-lg font-bold text-sky-800">${c.name}</div>
+          <div class="text-xs text-sky-500 mt-1">${c.prov}</div>
+        </button>
+      `).join('');
+    }
+
+    // Render weather display
+    function renderWeather(data) {
+      // Current weather
+      document.getElementById('currentWeather').innerHTML = `
+        <div class="flex flex-col md:flex-row items-center gap-8">
+          <div class="flex-1 text-center md:text-left">
+            <div class="flex items-center gap-3 justify-center md:justify-start mb-4">
+              <span class="text-4xl">📍</span>
+              <div>
+                <h2 class="text-3xl font-black text-sky-800">${data.name}</h2>
+                <p class="text-sky-500 font-medium">${data.prov}</p>
+              </div>
+            </div>
+            
+            <div class="flex items-center justify-center md:justify-start gap-6 mt-6">
+              <span class="text-8xl drop-shadow-lg">${data.condition.icon}</span>
+              <div>
+                <div class="text-7xl font-black text-sky-700">${data.temp}°</div>
+                <div class="text-xl text-sky-600 font-semibold capitalize mt-2">${data.condition.desc}</div>
+                <div class="text-sm text-gray-500 mt-2">Terasa seperti ${data.feelsLike}°</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex-1 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl p-6 shadow-inner">
+            <div class="grid grid-cols-2 gap-4">
+              <div class="text-center">
+                <div class="text-3xl mb-2">🌡️</div>
+                <div class="text-sm text-gray-600">Min / Max</div>
+                <div class="text-lg font-bold text-sky-700">${data.min}° / ${data.max}°</div>
+              </div>
+              <div class="text-center">
+                <div class="text-3xl mb-2">💧</div>
+                <div class="text-sm text-gray-600">Kelembapan</div>
+                <div class="text-lg font-bold text-sky-700">${data.humidity}%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Stat cards
+      document.getElementById('statCards').innerHTML = `
+        <div class="stat-card glass-card p-4 rounded-2xl border border-white/30 text-center">
+          <div class="text-3xl mb-2">💨</div>
+          <div class="text-xs text-gray-600 mb-1">Angin</div>
+          <div class="font-bold text-sky-700">${data.windSpeed} m/s</div>
+          <div class="text-xs text-gray-500">${data.windDir}</div>
+        </div>
+        <div class="stat-card glass-card p-4 rounded-2xl border border-white/30 text-center">
+          <div class="text-3xl mb-2">🔆</div>
+          <div class="text-xs text-gray-600 mb-1">UV Index</div>
+          <div class="font-bold text-sky-700">${data.uvIndex}</div>
+          <div class="text-xs text-gray-500">${data.uvIndex<3?'Rendah':data.uvIndex<6?'Sedang':data.uvIndex<8?'Tinggi':'Sangat Tinggi'}</div>
+        </div>
+        <div class="stat-card glass-card p-4 rounded-2xl border border-white/30 text-center">
+          <div class="text-3xl mb-2">🌫️</div>
+          <div class="text-xs text-gray-600 mb-1">Jarak Pandang</div>
+          <div class="font-bold text-sky-700">${data.visibility} km</div>
+          <div class="text-xs text-gray-500">Baik</div>
+        </div>
+        <div class="stat-card glass-card p-4 rounded-2xl border border-white/30 text-center">
+          <div class="text-3xl mb-2">🎚️</div>
+          <div class="text-xs text-gray-600 mb-1">Tekanan</div>
+          <div class="font-bold text-sky-700">${data.pressure} mb</div>
+          <div class="text-xs text-gray-500">Normal</div>
+        </div>
+      `;
+
+      // 7-day forecast
+      const forecast = generate7DayForecast(data);
+      document.getElementById('forecastGrid').innerHTML = forecast.map(f=>`
+        <div class="forecast-card glass-card p-5 rounded-2xl border border-white/30 text-center shadow-lg">
+          <div class="font-bold text-sky-800 mb-1">${f.day}</div>
+          <div class="text-xs text-gray-500 mb-3">${f.date}</div>
+          <div class="text-5xl my-3">${f.condition.icon}</div>
+          <div class="text-sm text-gray-600 capitalize mb-2">${f.condition.desc}</div>
+          <div class="text-2xl font-black text-sky-700 mb-1">${f.temp}°</div>
+          <div class="text-xs text-gray-500">${f.min}° / ${f.max}°</div>
+        </div>
+      `).join('');
+
+      // Hourly forecast
+      const hourly = generateHourlyForecast(data);
+      document.getElementById('hourlyForecast').innerHTML = hourly.map(h=>`
+        <div class="forecast-card glass-card p-4 rounded-2xl border border-white/30 text-center min-w-[100px] shadow-lg">
+          <div class="font-semibold text-sky-800 mb-2">${h.hour}</div>
+          <div class="text-4xl my-2">${h.condition.icon}</div>
+          <div class="text-xl font-bold text-sky-700">${h.temp}°</div>
+        </div>
+      `).join('');
+
+      document.getElementById('weatherSection').classList.remove('hidden');
+      setTimeout(()=>{
+        document.getElementById('weatherSection').scrollIntoView({behavior:'smooth',block:'start'});
+      },100);
+    }
+
+    // Select city
+    window.selectCity = function(cityName) {
+      currentCity = cities.find(c=>c.name===cityName);
+      renderCityGrid();
+      const weatherData = generateWeather(currentCity);
+      renderWeather(weatherData);
+    };
+
+    // Reset filters
+    window.resetFilters = function() {
+      searchTerm = '';
+      provinceFilter = '';
+      document.getElementById('searchInput').value = '';
+      document.getElementById('provinceFilter').value = '';
+      renderCityGrid();
+    };
+
+    // Event listeners
+    document.addEventListener('DOMContentLoaded',()=>{
+      updateDateTime();
+      setInterval(updateDateTime,1000);
+      populateProvinceFilter();
+      renderCityGrid();
+      
+      document.getElementById('searchInput').addEventListener('input',e=>{
+        searchTerm = e.target.value.toLowerCase();
+        renderCityGrid();
+      });
+      
+      document.getElementById('provinceFilter').addEventListener('change',e=>{
+        provinceFilter = e.target.value;
+        renderCityGrid();
+      });
+    });
+  </script>
+</body>
+</html>
